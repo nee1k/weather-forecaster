@@ -1,23 +1,21 @@
-# WeatherFlow Analytics - Makefile
-# Production-ready data engineering platform
+# WeatherFlow Analytics - Academic Project Makefile
+# ENGR-E516 Engineering Cloud Computing - Spring 2024
 
-.PHONY: help up down build clean test lint format docker-build docker-push
-.PHONY: kafka-up kafka-down spark-up spark-down airflow-up airflow-down postgres-up postgres-down
-.PHONY: dev dev-watch logs monitor dashboard api-docs
+.PHONY: help setup up down build clean test logs status dashboard
 
 # Default target
 help: ## Show this help message
-	@echo "WeatherFlow Analytics - Production Data Engineering Platform"
-	@echo "=========================================================="
+	@echo "WeatherFlow Analytics - Academic Project"
+	@echo "========================================"
 	@echo ""
 	@echo "Available commands:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-# Environment setup
+# Initial setup
 setup: ## Initial project setup
 	@echo "Setting up WeatherFlow Analytics..."
-	cp .env.example .env
+	cp env.example .env
 	@echo "✅ Environment file created. Please edit .env with your configuration."
 	@echo "📝 Next steps:"
 	@echo "   1. Edit .env file with your API keys and configuration"
@@ -35,12 +33,11 @@ up: ## Start all services
 	docker-compose -f docker-compose.yml up -d
 	@echo "✅ All services started"
 	@echo "📊 Access services:"
-	@echo "   - Airflow UI: http://localhost:8080"
-	@echo "   - Kafka Control Center: http://localhost:9021"
 	@echo "   - Weather Dashboard: http://localhost:8501"
-	@echo "   - PostgreSQL: localhost:5432"
-	@echo "   - Prometheus: http://localhost:9090"
-	@echo "   - Grafana: http://localhost:3000"
+	@echo "   - API Documentation: http://localhost:8000/docs"
+	@echo "   - Airflow UI: http://localhost:8080 (admin/admin)"
+	@echo "   - Kafka Control Center: http://localhost:9021"
+	@echo "   - Grafana: http://localhost:3000 (admin/admin)"
 
 down: ## Stop all services
 	@echo "🛑 Stopping all services..."
@@ -93,12 +90,12 @@ postgres-down: ## Stop PostgreSQL
 # Development
 dev: ## Start development environment
 	@echo "🔧 Starting development environment..."
-	docker-compose -f docker-compose.dev.yml up -d
+	docker-compose -f docker-compose.yml up -d
 	@echo "✅ Development environment started"
 
 dev-watch: ## Start development with hot reload
 	@echo "🔧 Starting development with hot reload..."
-	docker-compose -f docker-compose.dev.yml up
+	docker-compose -f docker-compose.yml up
 	@echo "✅ Development environment with hot reload started"
 
 # Monitoring and logs
@@ -120,41 +117,29 @@ logs-postgres: ## Show PostgreSQL logs
 # Testing
 test: ## Run all tests
 	@echo "🧪 Running tests..."
-	docker-compose -f docker-compose.test.yml up --abort-on-container-exit
-	@echo "✅ Tests completed"
+	docker-compose -f docker-compose.yml run --rm app python -m pytest tests/ -v
 
 test-unit: ## Run unit tests
 	@echo "🧪 Running unit tests..."
-	docker-compose -f docker-compose.test.yml run --rm app python -m pytest tests/unit/ -v
+	docker-compose -f docker-compose.yml run --rm app python -m pytest tests/unit/ -v
 
 test-integration: ## Run integration tests
 	@echo "🧪 Running integration tests..."
-	docker-compose -f docker-compose.test.yml run --rm app python -m pytest tests/integration/ -v
-
-test-e2e: ## Run end-to-end tests
-	@echo "🧪 Running end-to-end tests..."
-	docker-compose -f docker-compose.test.yml run --rm app python -m pytest tests/e2e/ -v
-
-coverage: ## Generate test coverage report
-	@echo "📊 Generating coverage report..."
-	docker-compose -f docker-compose.test.yml run --rm app python -m pytest --cov=src --cov-report=html --cov-report=term
-	@echo "✅ Coverage report generated"
+	docker-compose -f docker-compose.yml run --rm app python -m pytest tests/integration/ -v
 
 # Code quality
 lint: ## Run linting
 	@echo "🔍 Running linting..."
-	docker-compose -f docker-compose.test.yml run --rm app flake8 src/ tests/
-	@echo "✅ Linting completed"
+	docker-compose -f docker-compose.yml run --rm app flake8 src/ tests/
 
 format: ## Format code
 	@echo "🎨 Formatting code..."
-	docker-compose -f docker-compose.test.yml run --rm app black src/ tests/
-	@echo "✅ Code formatting completed"
+	docker-compose -f docker-compose.yml run --rm app black src/ tests/
 
 # Database operations
 db-migrate: ## Run database migrations
 	@echo "🗄️ Running database migrations..."
-	docker-compose -f docker-compose.yml exec postgres psql -U weatherflow -d weather_analytics -f /docker-entrypoint-initdb.d/migrations/001_initial_schema.sql
+	docker-compose -f docker-compose.yml exec postgres psql -U weatherflow -d weather_analytics -f /docker-entrypoint-initdb.d/001_initial_schema.sql
 	@echo "✅ Database migrations completed"
 
 db-reset: ## Reset database
@@ -163,28 +148,6 @@ db-reset: ## Reset database
 	docker volume rm weather-forecaster_postgres_data
 	docker-compose -f docker-compose.yml up -d postgres
 	@echo "✅ Database reset completed"
-
-# Production deployment
-build-prod: ## Build production images
-	@echo "🏭 Building production images..."
-	docker-compose -f docker-compose.prod.yml build
-	@echo "✅ Production images built"
-
-deploy-prod: ## Deploy to production
-	@echo "🚀 Deploying to production..."
-	docker-compose -f docker-compose.prod.yml up -d
-	@echo "✅ Production deployment completed"
-
-# Scaling
-scale-kafka=%: ## Scale Kafka brokers (e.g., make scale-kafka=3)
-	@echo "📡 Scaling Kafka to $(subst scale-kafka=,,$@) brokers..."
-	docker-compose -f docker-compose.yml up -d --scale broker=$(subst scale-kafka=,,$@)
-	@echo "✅ Kafka scaled to $(subst scale-kafka=,,$@) brokers"
-
-scale-spark=%: ## Scale Spark workers (e.g., make scale-spark=2)
-	@echo "⚡ Scaling Spark to $(subst scale-spark=,,$@) workers..."
-	docker-compose -f docker-compose.yml up -d --scale spark-worker=$(subst scale-spark=,,$@)
-	@echo "✅ Spark scaled to $(subst scale-spark=,,$@) workers"
 
 # Utility commands
 clean: ## Clean up Docker resources
@@ -200,15 +163,6 @@ status: ## Show service status
 dashboard: ## Open dashboard in browser
 	@echo "🌐 Opening dashboard..."
 	open http://localhost:8501 || xdg-open http://localhost:8501 || echo "Please open http://localhost:8501 in your browser"
-
-monitor: ## Open monitoring in browser
-	@echo "📈 Opening monitoring..."
-	open http://localhost:3000 || xdg-open http://localhost:3000 || echo "Please open http://localhost:3000 in your browser"
-
-api-docs: ## Generate API documentation
-	@echo "📚 Generating API documentation..."
-	docker-compose -f docker-compose.test.yml run --rm app python -m pydoc-markdown
-	@echo "✅ API documentation generated"
 
 # Health checks
 health: ## Check service health
